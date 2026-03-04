@@ -259,6 +259,10 @@ importers:
         version: 0.10.0(encoding@0.1.13)
 
   apps/electron:
+    dependencies:
+      json5:
+        specifier: ^2.2.3
+        version: 2.2.3
     devDependencies:
       '@types/node':
         specifier: ^24.4.0
