@@ -123,7 +123,7 @@
     "electron:pack": "pnpm electron:build && pnpm --dir apps/electron run pack",
     "electron:dist": "pnpm electron:build && pnpm --dir apps/electron run dist",
     "electron:dist:mac": "pnpm electron:build && pnpm --dir apps/electron run dist:mac",
-    "electron:dist:win": "pnpm electron:build && pnpm --dir apps/electron run dist:win --win --x64",
+    "electron:dist:win": "pnpm electron:build && pnpm --dir apps/electron run dist:win",
     "electron:dist:linux": "pnpm electron:build && pnpm --dir apps/electron run dist:linux",
     "moltbot:rpc": "node scripts/run-node.mjs agent --mode rpc --json",
     "openclaw": "node scripts/run-node.mjs",
