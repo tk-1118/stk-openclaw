@@ -69,6 +69,22 @@ async function main() {
   await copyDirSafe(path.join(rootDir, "dist"), path.join(runtimeOpenClawDir, "dist"));
   await copyDirSafe(path.join(rootDir, "node_modules"), path.join(runtimeOpenClawDir, "node_modules"));
 
+  await fs.writeFile(
+    path.join(runtimeRoot, "runtime-metadata.json"),
+    JSON.stringify(
+      {
+        preparedAt: new Date().toISOString(),
+        platform,
+        arch,
+        platformKey,
+        nodeBinaryName,
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
   console.log(`Prepared Electron runtime in ${runtimeRoot}`);
 }
 

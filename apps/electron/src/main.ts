@@ -66,9 +66,45 @@ function runtimeRootDir(): string {
 function resolveNodeBinary(): string {
   const platformNodeName = process.platform === "win32" ? "node.exe" : "node";
   const platformKey = runtimePlatformKey();
-  const packagedCandidate = path.join(process.resourcesPath, "node-runtime", platformKey, platformNodeName);
-  if (isPackagedApp() && fs.existsSync(packagedCandidate)) {
-    return packagedCandidate;
+  const packagedCandidates = [path.join(process.resourcesPath, "node-runtime", platformKey, platformNodeName)];
+  // Windows packaged apps may run under emulation; try common fallback runtime dirs.
+  if (isPackagedApp() && process.platform === "win32") {
+    packagedCandidates.push(path.join(process.resourcesPath, "node-runtime", "win32-x64", platformNodeName));
+    packagedCandidates.push(path.join(process.resourcesPath, "node-runtime", "win32-arm64", platformNodeName));
+  }
+  if (isPackagedApp()) {
+    const nodeRuntimeRoot = path.join(process.resourcesPath, "node-runtime");
+    let availableRuntimeDirs: string[] = [];
+    try {
+      if (fs.existsSync(nodeRuntimeRoot)) {
+        availableRuntimeDirs = fs
+          .readdirSync(nodeRuntimeRoot, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => entry.name)
+          .toSorted();
+      }
+    } catch {
+      // ignore directory read errors
+    }
+    let runtimeMetadata: string | null = null;
+    try {
+      const metadataPath = path.join(process.resourcesPath, "runtime-metadata.json");
+      if (fs.existsSync(metadataPath)) {
+        runtimeMetadata = fs.readFileSync(metadataPath, "utf8");
+      }
+    } catch {
+      // ignore metadata read errors
+    }
+    for (const candidate of packagedCandidates) {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+    throw new Error(
+      `Bundled Node runtime not found. Expected one of: ${packagedCandidates.join(", ")}. ` +
+        `Available runtime dirs: ${availableRuntimeDirs.join(", ") || "<none>"}. ` +
+        (runtimeMetadata ? `Runtime metadata: ${runtimeMetadata}` : "Runtime metadata: <missing>."),
+    );
   }
 
   const devCandidate = path.join(repoRootDir(), "apps", "electron", ".runtime", "node", platformKey, platformNodeName);
@@ -118,9 +154,7 @@ async function resolveGatewayToken(): Promise<string | null> {
       if (!raw.trim()) {
         continue;
       }
-      const parsed = JSON5.parse(raw) as {
-        gateway?: { auth?: { token?: unknown } };
-      };
+      const parsed = JSON5.parse(raw);
       const tokenCandidate = parsed?.gateway?.auth?.token;
       if (typeof tokenCandidate === "string" && tokenCandidate.trim()) {
         return tokenCandidate.trim();
@@ -201,6 +235,50 @@ async function waitForGatewayReady(port: number): Promise<void> {
     await sleep(GATEWAY_READY_POLL_MS);
   }
   throw new Error(`Gateway did not become healthy within ${GATEWAY_READY_TIMEOUT_MS}ms`);
+}
+
+async function waitForGatewayReadyOrFailure(
+  proc: ChildProcessWithoutNullStreams,
+  port: number,
+): Promise<void> {
+  let settled = false;
+  return await new Promise((resolve, reject) => {
+    const finishResolve = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      resolve();
+    };
+    const finishReject = (reason: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      reject(reason);
+    };
+    const onError = (error: Error) => finishReject(new Error(`Gateway process spawn failed: ${error.message}`));
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) =>
+      finishReject(
+        new Error(
+          `Gateway process exited before ready (code=${code ?? "null"}, signal=${signal ?? "null"})`,
+        ),
+      );
+    const cleanup = () => {
+      proc.off("error", onError);
+      proc.off("exit", onExit);
+    };
+
+    proc.on("error", onError);
+    proc.on("exit", onExit);
+
+    void waitForGatewayReady(port).then(finishResolve).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      finishReject(new Error(message));
+    });
+  });
 }
 
 function attachGatewayProcessLogs(proc: ChildProcessWithoutNullStreams): void {
@@ -305,7 +383,7 @@ async function startGatewayProcess(options?: { retries?: number }): Promise<numb
         }
       });
 
-      await waitForGatewayReady(port);
+      await waitForGatewayReadyOrFailure(proc, port);
       setGatewayStatus({
         state: "ready",
         port,
@@ -425,11 +503,25 @@ async function boot(): Promise<void> {
     await ensureMainWindow();
   } catch (error) {
     const detail = error instanceof Error ? error.stack ?? error.message : String(error);
+    let logTail = "";
+    try {
+      const logPath = gatewayLogPath();
+      if (fs.existsSync(logPath)) {
+        const content = fs.readFileSync(logPath, "utf8");
+        const lines = content.split(/\r?\n/).filter(Boolean);
+        logTail = lines.slice(-30).join("\n");
+      }
+    } catch {
+      // ignore log tail read failures
+    }
     setGatewayStatus({
       state: "error",
-      lastError: detail,
+      lastError: logTail ? `${detail}\n\nGateway log (tail):\n${logTail}` : detail,
     });
-    await dialog.showErrorBox("OpenClaw 启动失败", detail);
+    await dialog.showErrorBox(
+      "OpenClaw 启动失败",
+      logTail ? `${detail}\n\nGateway log (tail):\n${logTail}` : detail,
+    );
     app.quit();
   }
 }

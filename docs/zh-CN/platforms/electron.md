@@ -41,6 +41,11 @@ pnpm electron:dist:win
 pnpm electron:dist:linux
 ```
 
+注意：**请在对应目标平台上执行打包命令**。例如 Windows 安装包应在 Windows runner/机器上执行
+`pnpm electron:dist:win`，这样 `electron:prepare-runtime` 才会注入正确平台的 Node 运行时。
+不要在 macOS/Linux 上交叉打包 Windows 安装包（或反向交叉打包），否则可能出现
+`Bundled Node runtime not found`。
+
 通用构建（不区分平台目标）：
 
 ```bash
