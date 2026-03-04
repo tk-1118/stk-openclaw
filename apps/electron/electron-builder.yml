@@ -1,0 +1,48 @@
+appId: ai.openclaw.electron
+productName: OpenClaw
+asar: true
+
+directories:
+  output: ../../dist-electron
+
+files:
+  - dist/**/*
+  - package.json
+
+extraResources:
+  - from: .runtime/node
+    to: node-runtime
+  - from: .runtime/openclaw
+    to: openclaw-runtime
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
+  artifactName: OpenClaw-electron-${version}-mac-${arch}.${ext}
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: OpenClaw-electron-${version}-win-${arch}.${ext}
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Utility
+  artifactName: OpenClaw-electron-${version}-linux-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

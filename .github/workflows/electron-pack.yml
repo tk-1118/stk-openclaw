@@ -1,0 +1,58 @@
+name: Electron Pack
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "apps/electron/**"
+      - "scripts/electron-prepare-runtime.mjs"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/electron-pack.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/electron/**"
+      - "scripts/electron-prepare-runtime.mjs"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/electron-pack.yml"
+
+jobs:
+  pack:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            dist_cmd: pnpm electron:dist:mac
+            artifact_glob: dist-electron/*
+          - os: windows-latest
+            dist_cmd: pnpm electron:dist:win
+            artifact_glob: dist-electron/*
+          - os: ubuntu-latest
+            dist_cmd: pnpm electron:dist:linux
+            artifact_glob: dist-electron/*
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup Node environment
+        uses: ./.github/actions/setup-node-env
+        with:
+          install-bun: "false"
+
+      - name: Install Electron workspace dependencies
+        run: pnpm --dir apps/electron install --frozen-lockfile
+
+      - name: Build Electron artifacts
+        run: ${{ matrix.dist_cmd }}
+
+      - name: Upload Electron artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-${{ matrix.os }}
+          path: ${{ matrix.artifact_glob }}

@@ -3,6 +3,7 @@ node_modules
 .env
 docker-compose.extra.yml
 dist
+dist-electron
 pnpm-lock.yaml
 bun.lock
 bun.lockb
@@ -41,6 +42,7 @@ bin/clawdbot-mac
 bin/docs-list
 apps/macos/.build-local/
 apps/macos/.swiftpm/
+apps/electron/.runtime/
 apps/shared/MoltbotKit/.swiftpm/
 apps/shared/OpenClawKit/.swiftpm/
 Core/
